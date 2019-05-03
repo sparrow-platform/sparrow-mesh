@@ -13,11 +13,9 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.AdvertisingOptions;
@@ -39,9 +37,6 @@ import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class Sparrow extends Service {
     public int counter=0;
@@ -102,18 +97,16 @@ public class Sparrow extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         super.onStartCommand(intent, flags, startId);
         //startTimer();
-        initiateNearby();
+        startNearby();
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        connectionsClient.stopAdvertising();
-        connectionsClient.stopDiscovery();
-        connectionsClient.stopAllEndpoints();
-        Log.i(" Sparrow", "Service Destroyed");
 
+        Log.i(" Sparrow", "Service Destroyed");
+        stopNearby();
         /*
         Intent broadcastIntent = new Intent(this, SparrowBroadcastReceiver.class);
         broadcastIntent.putExtra("action","restart");
@@ -132,10 +125,18 @@ public class Sparrow extends Service {
 
 
     /********************************NEARBY********************/
-    public void initiateNearby(){
+    private void startNearby(){
             startAdvertising();
             startDiscovery();
     }
+
+    private void stopNearby(){
+        connectionsClient.stopAdvertising();
+        connectionsClient.stopDiscovery();
+        connectionsClient.stopAllEndpoints();
+    }
+
+
 
     private void startDiscovery() {
         DiscoveryOptions discoveryOptions =
@@ -180,6 +181,8 @@ public class Sparrow extends Service {
             new PayloadCallback() {
                 @Override
                 public void onPayloadReceived(String endpointId, Payload payload) {
+                    if(!activeEndpoints.contains(endpointId))
+                        activeEndpoints.add(endpointId);
                     try {
                         String receivedMessage = new String(payload.asBytes(),"UTF-8");
                         sendMessegeToActivity(new String(receivedMessage));
@@ -217,7 +220,10 @@ public class Sparrow extends Service {
                 @Override
                 public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
                     Log.i(TAG, "onConnectionInitiated: accepting connection");
-                    connectionsClient.acceptConnection(endpointId, payloadCallback);
+                    if(!activeEndpoints.contains(endpointId))
+                        connectionsClient.acceptConnection(endpointId, payloadCallback);
+                    else
+                        connectionsClient.rejectConnection(endpointId);
                 }
 
                 @Override
@@ -225,6 +231,7 @@ public class Sparrow extends Service {
                     if (result.getStatus().isSuccess()) {
                         Log.i(TAG, "onConnectionResult: connection successful");
                         activeEndpoints.add(endpointId);
+                        setTimeout(70000);  //Need dynamic values here
                         /*
                         connectionsClient.stopDiscovery();
                         connectionsClient.stopAdvertising();
@@ -291,6 +298,18 @@ public class Sparrow extends Service {
             }
         }, interval);
 
+    }
+
+    private void setTimeout(final int interval) {
+        final Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+               stopNearby();
+               startNearby();
+               handler.postDelayed(this,interval);
+            }
+        }, interval);
     }
 
     private String getTimestamp(){
