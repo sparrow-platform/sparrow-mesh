@@ -57,7 +57,7 @@ public class Sparrow extends Service {
         context = getApplicationContext();
         activeEndpoints = new ArrayList<>();
         startMyOwnForeground();
-        startHeartBeatBrodacster(5000);
+        startHeartBeatBrodacster(7000);
     }
 
     private void startMyOwnForeground(){
@@ -181,8 +181,10 @@ public class Sparrow extends Service {
                 @Override
                 public void onPayloadReceived(String endpointId, Payload payload) {
                     try {
-                        sendMessegeToActivity(new String(payload.asBytes(),"UTF-8"));
-                        connectionsClient.sendPayload(endpointId,Payload.fromBytes(("ACK from: "+ Build.MODEL+","+getTimestamp()).getBytes("UTF-8")));
+                        String receivedMessage = new String(payload.asBytes(),"UTF-8");
+                        sendMessegeToActivity(new String(receivedMessage));
+                        if(receivedMessage.contains("SYN"))
+                            connectionsClient.sendPayload(endpointId,Payload.fromBytes(("ACK from: "+ Build.MODEL+","+getTimestamp()).getBytes("UTF-8")));
                     } catch (UnsupportedEncodingException e) {
                         e.printStackTrace();
                     }

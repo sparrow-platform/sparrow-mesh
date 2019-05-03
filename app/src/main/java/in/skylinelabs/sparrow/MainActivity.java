@@ -16,6 +16,7 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.annotation.NonNull;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.MenuItem;
 import android.widget.Scroller;
@@ -117,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "App started");
 
         messages = findViewById(R.id.messages);
-        messages.setScroller(new Scroller(this));
+        messages.setMovementMethod(new ScrollingMovementMethod());
         LocalBroadcastManager.getInstance(this).registerReceiver(mMessageReceiver,
                 new IntentFilter("payload-received"));
     }
