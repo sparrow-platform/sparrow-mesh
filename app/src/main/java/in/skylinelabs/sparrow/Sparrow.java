@@ -15,6 +15,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -34,6 +35,9 @@ import com.google.android.gms.nearby.connection.Strategy;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -42,13 +46,16 @@ public class Sparrow extends Service {
     private Context context;
     private ConnectionsClient connectionsClient;
     private String TAG = "SparrowLog", codeName = "SPARROW";
+    private ArrayList<String> activeEndpoints;
 
     @Override
     public void onCreate() {
         super.onCreate();
         connectionsClient = Nearby.getConnectionsClient(this);
         context = getApplicationContext();
+        activeEndpoints = new ArrayList<>();
         startMyOwnForeground();
+        startHeartBeatBrodacster(5000);
     }
 
     private void startMyOwnForeground(){
@@ -113,6 +120,14 @@ public class Sparrow extends Service {
         //stoptimertask();
     }
 
+    private void sendMessegeToActivity(String message) {
+        Log.d("sender", "Broadcasting message");
+        Intent intent = new Intent("payload-received");
+        // You can also include some extra data.
+        intent.putExtra("message", message);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
+
 
     /********************************NEARBY********************/
     public void initiateNearby(){
@@ -122,7 +137,7 @@ public class Sparrow extends Service {
 
     private void startDiscovery() {
         DiscoveryOptions discoveryOptions =
-                new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build();
+                new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
         connectionsClient
                 .startDiscovery(getPackageName(), endpointDiscoveryCallback, discoveryOptions)
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
@@ -141,7 +156,7 @@ public class Sparrow extends Service {
 
     private void startAdvertising() {
         AdvertisingOptions advertisingOptions =
-                new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build();
+                new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
         connectionsClient
                 .startAdvertising(
                         codeName, getPackageName(), connectionLifecycleCallback, advertisingOptions)
@@ -163,7 +178,11 @@ public class Sparrow extends Service {
             new PayloadCallback() {
                 @Override
                 public void onPayloadReceived(String endpointId, Payload payload) {
-                    Toast.makeText(context, "Received: "+ payload.toString(), Toast.LENGTH_SHORT).show();
+                    try {
+                        sendMessegeToActivity(new String(payload.asBytes(),"UTF-8"));
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
                     Log.d(TAG,"Payload receivevd from: "+endpointId +" :" +payload.asBytes().toString());
                 }
 
@@ -194,15 +213,17 @@ public class Sparrow extends Service {
                 public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
                     Log.i(TAG, "onConnectionInitiated: accepting connection");
                     connectionsClient.acceptConnection(endpointId, payloadCallback);
-                    connectionsClient.sendPayload(endpointId,Payload.fromBytes("Hello".getBytes()));
                 }
 
                 @Override
                 public void onConnectionResult(final String endpointId, ConnectionResolution result) {
                     if (result.getStatus().isSuccess()) {
                         Log.i(TAG, "onConnectionResult: connection successful");
+                        activeEndpoints.add(endpointId);
+                        /*
                         connectionsClient.stopDiscovery();
                         connectionsClient.stopAdvertising();
+                        */
                     } else {
                         final Handler handler = new Handler();
                         handler.postDelayed(new Runnable() {
@@ -218,6 +239,7 @@ public class Sparrow extends Service {
                 @Override
                 public void onDisconnected(String endpointId) {
                     Log.i(TAG, "onDisconnected: disconnected from the opponent");
+                    activeEndpoints.remove(endpointId);
                 }
             };
 
@@ -248,7 +270,23 @@ public class Sparrow extends Service {
     */
     /********************************TIMER********************/
 
+    private void startHeartBeatBrodacster(final int interval) {
+        final Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                for(String endpoint: activeEndpoints){
+                    try {
+                        connectionsClient.sendPayload(endpoint,Payload.fromBytes(("Hello from: "+ Build.MODEL).getBytes("UTF-8")));
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
+                }
+                handler.postDelayed(this,interval);
+            }
+        }, interval);
 
+    }
 
     @Nullable
     @Override
