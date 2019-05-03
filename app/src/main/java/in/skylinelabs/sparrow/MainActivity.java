@@ -1,10 +1,13 @@
 package in.skylinelabs.sparrow;
 
+import android.Manifest;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.design.widget.BottomNavigationView;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.annotation.NonNull;
 import android.util.Log;
@@ -49,13 +52,72 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         BottomNavigationView navView = findViewById(R.id.nav_view);
         navView.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
-//        navView.setSelectedItemId(R.id.navigation_home);
+        Log.i(" Sparrow", "App started");
+
+
+        /********************PERMISSIONS*******************/
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.BLUETOOTH)) {
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.BLUETOOTH},
+                    1);
+        }
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.BLUETOOTH_ADMIN)) {
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.BLUETOOTH_ADMIN},
+                    2);
+        }
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.ACCESS_WIFI_STATE)) {
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_WIFI_STATE},
+                    3);
+        }
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.CHANGE_WIFI_STATE)) {
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CHANGE_WIFI_STATE},
+                    4);
+        }
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.ACCESS_COARSE_LOCATION)) {
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+                    5);
+        }
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.FOREGROUND_SERVICE)) {
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.FOREGROUND_SERVICE},
+                    6);
+        }
+
+        /********************PERMISSIONS*******************/
+
+
 
         ctx = this;
         sparrowService = new Sparrow(getCtx());
         mServiceIntent = new Intent(getCtx(), sparrowService.getClass());
         if (!isMyServiceRunning(sparrowService.getClass())) {
-            startService(mServiceIntent);
+//            startService(mServiceIntent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(new Intent(ctx, Sparrow.class));
+            } else {
+                ctx.startService(new Intent(ctx, Sparrow.class));
+            }
         }
 
     }
@@ -65,11 +127,11 @@ public class MainActivity extends AppCompatActivity {
         ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
         for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
             if (serviceClass.getName().equals(service.service.getClassName())) {
-                Log.i ("Sparrow Service ", true+"");
+                Log.i (" Sparrow Service ", true+"");
                 return true;
             }
         }
-        Log.i ("Sparrow Service ", false+"");
+        Log.i (" Sparrow Service ", false+"");
         return false;
     }
 
@@ -77,9 +139,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         stopService(mServiceIntent);
-        Log.i("Sparrow App destroyed", "onAppDestroy!");
+        Log.i(" Sparrow", "App destroyed");
         super.onDestroy();
 
     }
+
+
 
 }
