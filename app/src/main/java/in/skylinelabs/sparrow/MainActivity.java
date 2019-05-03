@@ -74,6 +74,16 @@ public class MainActivity extends AppCompatActivity {
                 ActivityCompat.requestPermissions(this,REQUIRED_PERMISSIONS,REQUEST_CODE_REQUIRED_PERMISSIONS);
             }
         }
+
+        sparrowService = new Sparrow();
+        mServiceIntent = new Intent(this, sparrowService.getClass());
+        if (!isMyServiceRunning(sparrowService.getClass())) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(new Intent(this, Sparrow.class));
+            } else {
+                startService(new Intent(this, Sparrow.class));
+            }
+        }
     }
 
     @Override
@@ -83,21 +93,6 @@ public class MainActivity extends AppCompatActivity {
         BottomNavigationView navView = findViewById(R.id.nav_view);
         navView.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
         Log.i(TAG, "App started");
-
-
-
-
-
-        sparrowService = new Sparrow(this);
-        mServiceIntent = new Intent(this, sparrowService.getClass());
-        if (!isMyServiceRunning(sparrowService.getClass())) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(new Intent(this, Sparrow.class));
-            } else {
-                startService(new Intent(this, Sparrow.class));
-            }
-        }
-
     }
 
     private boolean isMyServiceRunning(Class<?> serviceClass) {
@@ -132,6 +127,9 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
         if (requestCode != REQUEST_CODE_REQUIRED_PERMISSIONS) {
+            Intent broadcastIntent = new Intent(this, SparrowBroadcastReceiver.class);
+            broadcastIntent.putExtra("action","restart");
+            sendBroadcast(broadcastIntent);
             return;
         }
 

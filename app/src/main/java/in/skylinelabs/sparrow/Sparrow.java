@@ -48,51 +48,51 @@ public class Sparrow extends Service {
         super.onCreate();
         connectionsClient = Nearby.getConnectionsClient(this);
         context = getApplicationContext();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            startMyOwnForeground();
-        else
-            startForeground(1, new Notification());
+        startMyOwnForeground();
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.O)
     private void startMyOwnForeground(){
+        Intent intentAction = new Intent(context, SparrowBroadcastReceiver.class);
+
+        intentAction.putExtra("action", "exit");
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, -1, intentAction, PendingIntent.FLAG_UPDATE_CURRENT);
+        NotificationCompat.Builder notificationBuilder;
         String NOTIFICATION_CHANNEL_ID = "com.example.simpleapp";
-        String channelName = "My Background Service";
-        NotificationChannel notificationChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_NONE);
-        notificationChannel.setLightColor(Color.BLUE);
-        notificationChannel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
-        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        assert manager != null;
-        manager.createNotificationChannel(notificationChannel);
+        String channelName = "Sparrow Background Service";
 
-        Intent intentAction = new Intent(context,SparrowBroadcastReceiver.class);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            NotificationChannel notificationChannel = null;
+            notificationChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_NONE);
+            notificationChannel.setLightColor(Color.BLUE);
+            notificationChannel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
 
-        intentAction.putExtra("action","exit");
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(context,-1,intentAction,PendingIntent.FLAG_UPDATE_CURRENT);
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            assert manager != null;
+            manager.createNotificationChannel(notificationChannel);
 
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
-        Notification notification = notificationBuilder.setOngoing(true)
-                .setSmallIcon(R.drawable.sparrow)
-                .setContentTitle("Sparrow is keeping you connected")
-                .setPriority(NotificationManager.IMPORTANCE_MIN)
-                .setCategory(Notification.CATEGORY_SERVICE)
-                .addAction(R.drawable.ic_clear_black_24dp,"Stop",pendingIntent)
-                .build();
-        startForeground(2, notification);
-    }
-
-    public Sparrow(Context applicationContext) {
-        super();
-        Log.i(" Sparrow", "Service started");
+             notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
+        }
+        else {
+             notificationBuilder = new NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID);
+        }
+            Notification notification = notificationBuilder.setOngoing(true)
+                    .setSmallIcon(R.drawable.sparrow)
+                    .setContentTitle("Sparrow is keeping you connected")
+                    .setPriority(NotificationManager.IMPORTANCE_MIN)
+                    .setCategory(Notification.CATEGORY_SERVICE)
+                    .addAction(R.drawable.ic_clear_black_24dp, "Stop", pendingIntent)
+                    .build();
+            startForeground(1, notification);
     }
 
     public Sparrow() {
+        super();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         super.onStartCommand(intent, flags, startId);
-        startTimer();
+        //startTimer();
         initiateNearby();
         return START_STICKY;
     }
@@ -110,7 +110,7 @@ public class Sparrow extends Service {
         broadcastIntent.putExtra("action","restart");
         sendBroadcast(broadcastIntent);
         */
-        stoptimertask();
+        //stoptimertask();
     }
 
 
@@ -164,7 +164,7 @@ public class Sparrow extends Service {
                 @Override
                 public void onPayloadReceived(String endpointId, Payload payload) {
                     Toast.makeText(context, "Received: "+ payload.toString(), Toast.LENGTH_SHORT).show();
-                    Log.d(TAG,"Payload receivevd: "+payload.toString());
+                    Log.d(TAG,"Payload receivevd from: "+endpointId +" :" +payload.asBytes().toString());
                 }
 
                 @Override
@@ -177,13 +177,13 @@ public class Sparrow extends Service {
             new EndpointDiscoveryCallback() {
                 @Override
                 public void onEndpointFound(String endpointId, DiscoveredEndpointInfo info) {
-                    Log.i(TAG, "onEndpointFound: endpoint found, connecting");
+                    Log.i(TAG, "onEndpointFound: endpoint found, connecting "+endpointId);
                     connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
                 }
 
                 @Override
                 public void onEndpointLost(String endpointId) {
-                    Log.i(TAG, "onEndPointLost: End point lost");
+                    Log.i(TAG, "onEndPointLost: End point lost "+endpointId);
                 }
             };
 
@@ -194,6 +194,7 @@ public class Sparrow extends Service {
                 public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
                     Log.i(TAG, "onConnectionInitiated: accepting connection");
                     connectionsClient.acceptConnection(endpointId, payloadCallback);
+                    connectionsClient.sendPayload(endpointId,Payload.fromBytes("Hello".getBytes()));
                 }
 
                 @Override
@@ -222,6 +223,7 @@ public class Sparrow extends Service {
 
     /********************************TIMER********************/
 
+    /*
     private Timer timer;
     private TimerTask timerTask;
     long oldTime=0;
@@ -243,6 +245,7 @@ public class Sparrow extends Service {
             timer = null;
         }
     }
+    */
     /********************************TIMER********************/
 
 
