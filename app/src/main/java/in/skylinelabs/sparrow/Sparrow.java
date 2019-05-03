@@ -36,7 +36,9 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.io.UnsupportedEncodingException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -131,8 +133,11 @@ public class Sparrow extends Service {
 
     /********************************NEARBY********************/
     public void initiateNearby(){
-        startAdvertising();
-        startDiscovery();
+        Random r = new Random();
+        if(r.nextBoolean())
+            startAdvertising();
+        else
+            startDiscovery();
     }
 
     private void startDiscovery() {
@@ -180,6 +185,7 @@ public class Sparrow extends Service {
                 public void onPayloadReceived(String endpointId, Payload payload) {
                     try {
                         sendMessegeToActivity(new String(payload.asBytes(),"UTF-8"));
+                        connectionsClient.sendPayload(endpointId,Payload.fromBytes(("ACK from: "+ Build.MODEL+","+getTimestamp()).getBytes("UTF-8")));
                     } catch (UnsupportedEncodingException e) {
                         e.printStackTrace();
                     }
@@ -277,7 +283,7 @@ public class Sparrow extends Service {
             public void run() {
                 for(String endpoint: activeEndpoints){
                     try {
-                        connectionsClient.sendPayload(endpoint,Payload.fromBytes(("Hello from: "+ Build.MODEL).getBytes("UTF-8")));
+                        connectionsClient.sendPayload(endpoint,Payload.fromBytes(("SYN from: "+ Build.MODEL +","+getTimestamp()).getBytes("UTF-8")));
                     } catch (UnsupportedEncodingException e) {
                         e.printStackTrace();
                     }
@@ -287,6 +293,13 @@ public class Sparrow extends Service {
         }, interval);
 
     }
+
+    private String getTimestamp(){
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
+        String currentDateandTime = sdf.format(new Date());
+        return currentDateandTime;
+    };
+
 
     @Nullable
     @Override
