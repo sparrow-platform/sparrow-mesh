@@ -133,10 +133,7 @@ public class Sparrow extends Service {
 
     /********************************NEARBY********************/
     public void initiateNearby(){
-        Random r = new Random();
-        if(r.nextBoolean())
             startAdvertising();
-        else
             startDiscovery();
     }
 
