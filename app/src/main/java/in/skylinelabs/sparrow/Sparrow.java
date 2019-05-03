@@ -3,52 +3,72 @@ package in.skylinelabs.sparrow;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.AdvertisingOptions;
 import com.google.android.gms.nearby.connection.ConnectionInfo;
 import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback;
 import com.google.android.gms.nearby.connection.ConnectionResolution;
-import com.google.android.gms.nearby.connection.ConnectionsStatusCodes;
+import com.google.android.gms.nearby.connection.ConnectionsClient;
+import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo;
 import com.google.android.gms.nearby.connection.DiscoveryOptions;
+import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback;
 import com.google.android.gms.nearby.connection.Payload;
 import com.google.android.gms.nearby.connection.PayloadCallback;
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
 import com.google.android.gms.nearby.connection.Strategy;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class Sparrow extends Service {
     public int counter=0;
+    private Context context;
+    private ConnectionsClient connectionsClient;
+    private String TAG = "SparrowLog", codeName = "SPARROW";
 
     @Override
     public void onCreate() {
         super.onCreate();
+        connectionsClient = Nearby.getConnectionsClient(this);
+        context = getApplicationContext();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             startMyOwnForeground();
         else
             startForeground(1, new Notification());
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     private void startMyOwnForeground(){
         String NOTIFICATION_CHANNEL_ID = "com.example.simpleapp";
         String channelName = "My Background Service";
-        NotificationChannel chan = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_NONE);
-        chan.setLightColor(Color.BLUE);
-        chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+        NotificationChannel notificationChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_NONE);
+        notificationChannel.setLightColor(Color.BLUE);
+        notificationChannel.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         assert manager != null;
-        manager.createNotificationChannel(chan);
+        manager.createNotificationChannel(notificationChannel);
+
+        Intent intentAction = new Intent(context,SparrowBroadcastReceiver.class);
+
+        intentAction.putExtra("action","exit");
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context,-1,intentAction,PendingIntent.FLAG_UPDATE_CURRENT);
 
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
         Notification notification = notificationBuilder.setOngoing(true)
@@ -56,6 +76,7 @@ public class Sparrow extends Service {
                 .setContentTitle("Sparrow is keeping you connected")
                 .setPriority(NotificationManager.IMPORTANCE_MIN)
                 .setCategory(Notification.CATEGORY_SERVICE)
+                .addAction(R.drawable.ic_clear_black_24dp,"Stop",pendingIntent)
                 .build();
         startForeground(2, notification);
     }
@@ -79,92 +100,125 @@ public class Sparrow extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        connectionsClient.stopAdvertising();
+        connectionsClient.stopDiscovery();
+        connectionsClient.stopAllEndpoints();
         Log.i(" Sparrow", "Service Destroyed");
-        Intent broadcastIntent = new Intent(this, SparrowRestartBroadcastReceiver.class);
+
+        /*
+        Intent broadcastIntent = new Intent(this, SparrowBroadcastReceiver.class);
+        broadcastIntent.putExtra("action","restart");
         sendBroadcast(broadcastIntent);
+        */
         stoptimertask();
     }
 
 
     /********************************NEARBY********************/
     public void initiateNearby(){
-//
-//        Nearby.getConnectionsClient(this)
-//                .startAdvertising(
-//                        /* endpointName= */ "Device A",
-//                        /* serviceId= */ "com.example.package_name",
-//                        mConnectionLifecycleCallback,
-//                        new AdvertisingOptions(Strategy.P2P_CLUSTER));
-//
-//
-//        Nearby.getConnectionsClient(this)
-//                .startDiscovery(
-//                        /* serviceId= */ "com.example.package_name",
-//                        mEndpointDiscoveryCallback,
-//                        new DiscoveryOptions(Strategy.P2P_CLUSTER));
-//
-////        Nearby.getConnectionsClient(this)
-////                .requestConnection(
-////                        /* endpointName= */ "Device B",
-////                        advertiserEndpointId,
-////                        mConnectionLifecycleCallback);
-////
-////        Nearby.getConnectionsClient(this).sendPayload(endpointId, payload);
-
+        startAdvertising();
+        startDiscovery();
     }
-//
-//    private final ConnectionLifecycleCallback mConnectionLifecycleCallback =
-//            new ConnectionLifecycleCallback() {
-//                @Override
-//                public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
-//                    // Automatically accept the connection on both sides.
-//                    Nearby.getConnectionsClient(this).acceptConnection(endpointId, mPayloadCallback);
-//                }
-//
-//                @Override
-//                public void onConnectionResult(String endpointId, ConnectionResolution result) {
-//                    switch (result.getStatus().getStatusCode()) {
-//                        case ConnectionsStatusCodes.STATUS_OK:
-//                            // We're connected! Can now start sending and receiving data.
-//                            break;
-//                        case ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED:
-//                            // The connection was rejected by one or both sides.
-//                            break;
-//                        default:
-//                            // The connection was broken before it was accepted.
-//                            break;
-//                    }
-//                }
-//
-//                @Override
-//                public void onDisconnected(String endpointId) {
-//                    // We've been disconnected from this endpoint. No more data can be
-//                    // sent or received.
-//                }
-//            };
-//
-//
-//
-//    private final PayloadCallback mPayloadCallback =
-//            new PayloadCallback() {
-//                @Override
-//                public void onPayloadReceived(String endpointId, Payload payload) {
-//                    // A new payload is being sent over.
-//                }
-//
-//                @Override
-//                public void onPayloadTransferUpdate(String endpointId, PayloadTransferUpdate update) {
-//                    // Payload progress has updated.
-//                }
-//            };
-//
 
-    /********************************NEARBY********************/
+    private void startDiscovery() {
+        DiscoveryOptions discoveryOptions =
+                new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build();
+        connectionsClient
+                .startDiscovery(getPackageName(), endpointDiscoveryCallback, discoveryOptions)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.d(TAG,"Discovery success");
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.d(TAG,"Discovery failure");
+                    }
+                });
+    }
 
+    private void startAdvertising() {
+        AdvertisingOptions advertisingOptions =
+                new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build();
+        connectionsClient
+                .startAdvertising(
+                        codeName, getPackageName(), connectionLifecycleCallback, advertisingOptions)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.d(TAG,"Advertising success");
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.d(TAG,"Advertising Failure");
+                    }
+                });
+    }
 
+    private final PayloadCallback payloadCallback =
+            new PayloadCallback() {
+                @Override
+                public void onPayloadReceived(String endpointId, Payload payload) {
+                    Toast.makeText(context, "Received: "+ payload.toString(), Toast.LENGTH_SHORT).show();
+                    Log.d(TAG,"Payload receivevd: "+payload.toString());
+                }
 
+                @Override
+                public void onPayloadTransferUpdate(String endpointId, PayloadTransferUpdate update) {
+                    Log.d(TAG,"Payload tranfer update");
+                }
+            };
 
+    private final EndpointDiscoveryCallback endpointDiscoveryCallback =
+            new EndpointDiscoveryCallback() {
+                @Override
+                public void onEndpointFound(String endpointId, DiscoveredEndpointInfo info) {
+                    Log.i(TAG, "onEndpointFound: endpoint found, connecting");
+                    connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
+                }
 
+                @Override
+                public void onEndpointLost(String endpointId) {
+                    Log.i(TAG, "onEndPointLost: End point lost");
+                }
+            };
+
+    // Callbacks for connections to other devices
+    private final ConnectionLifecycleCallback connectionLifecycleCallback =
+            new ConnectionLifecycleCallback() {
+                @Override
+                public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
+                    Log.i(TAG, "onConnectionInitiated: accepting connection");
+                    connectionsClient.acceptConnection(endpointId, payloadCallback);
+                }
+
+                @Override
+                public void onConnectionResult(final String endpointId, ConnectionResolution result) {
+                    if (result.getStatus().isSuccess()) {
+                        Log.i(TAG, "onConnectionResult: connection successful");
+                        connectionsClient.stopDiscovery();
+                        connectionsClient.stopAdvertising();
+                    } else {
+                        final Handler handler = new Handler();
+                        handler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
+                            }
+                        }, 2000);
+                        Log.i(TAG, "onConnectionResult: connection failed " + result.getStatus().getStatusMessage());
+                    }
+                }
+
+                @Override
+                public void onDisconnected(String endpointId) {
+                    Log.i(TAG, "onDisconnected: disconnected from the opponent");
+                }
+            };
 
     /********************************TIMER********************/
 
