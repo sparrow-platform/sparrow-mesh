@@ -83,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
         sparrowService = new Sparrow();
         mServiceIntent = new Intent(this, sparrowService.getClass());
         if (!isMyServiceRunning(sparrowService.getClass())) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
                 startForegroundService(new Intent(this, Sparrow.class));
             } else {
                 startService(new Intent(this, Sparrow.class));

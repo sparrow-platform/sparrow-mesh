@@ -23,6 +23,7 @@ import com.google.android.gms.nearby.connection.ConnectionInfo;
 import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback;
 import com.google.android.gms.nearby.connection.ConnectionResolution;
 import com.google.android.gms.nearby.connection.ConnectionsClient;
+import com.google.android.gms.nearby.connection.ConnectionsStatusCodes;
 import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo;
 import com.google.android.gms.nearby.connection.DiscoveryOptions;
 import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback;
@@ -140,7 +141,7 @@ public class Sparrow extends Service {
 
     private void startDiscovery() {
         DiscoveryOptions discoveryOptions =
-                new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
+                new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER ).build();
         connectionsClient
                 .startDiscovery(getPackageName(), endpointDiscoveryCallback, discoveryOptions)
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
@@ -159,7 +160,7 @@ public class Sparrow extends Service {
 
     private void startAdvertising() {
         AdvertisingOptions advertisingOptions =
-                new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
+                new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER ).build();
         connectionsClient
                 .startAdvertising(
                         codeName, getPackageName(), connectionLifecycleCallback, advertisingOptions)
@@ -228,24 +229,44 @@ public class Sparrow extends Service {
 
                 @Override
                 public void onConnectionResult(final String endpointId, ConnectionResolution result) {
-                    if (result.getStatus().isSuccess()) {
-                        Log.i(TAG, "onConnectionResult: connection successful");
-                        activeEndpoints.add(endpointId);
-                        setTimeout(70000);  //Need dynamic values here
-                        /*
-                        connectionsClient.stopDiscovery();
-                        connectionsClient.stopAdvertising();
-                        */
-                    } else {
-                        final Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
-                            }
-                        }, 2000);
-                        Log.i(TAG, "onConnectionResult: connection failed " + result.getStatus().getStatusMessage());
+
+                    switch (result.getStatus().getStatusCode()) {
+                        case ConnectionsStatusCodes.STATUS_OK:
+                            // We're connected! Can now start sending and receiving data.
+                            Log.i(TAG, "onConnectionResult: connection successful");
+                            activeEndpoints.add(endpointId);
+                            break;
+                        case ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED:
+                            // The connection was rejected by one or both sides.
+                            Log.i(TAG, "onConnectionResult: connection rejected");
+                            break;
+                        case ConnectionsStatusCodes.STATUS_ERROR:
+                            // The connection broke before it was able to be accepted.
+                            Log.i(TAG, "onConnectionResult: connection broke before acceptance");
+                            break;
+                        default:
+                            // Unknown status code
+                            Log.i(TAG, "onConnectionResult: Something went wrong with the connection ");
                     }
+
+//                    if (result.getStatus().isSuccess()) {
+//                        Log.i(TAG, "onConnectionResult: connection successful");
+//                        activeEndpoints.add(endpointId);
+//                        setTimeout(70000);  //Need dynamic values here
+//                        /*
+//                        connectionsClient.stopDiscovery();
+//                        connectionsClient.stopAdvertising();
+//                        */
+//                    } else {
+//                        final Handler handler = new Handler();
+//                        handler.postDelayed(new Runnable() {
+//                            @Override
+//                            public void run() {
+//                                connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
+//                            }
+//                        }, 2000);
+//                        Log.i(TAG, "onConnectionResult: connection failed " + result.getStatus().getStatusMessage());
+//                    }
                 }
 
                 @Override
@@ -255,7 +276,32 @@ public class Sparrow extends Service {
                 }
             };
 
+    /********************************TIMER********************/
 
+    /*
+    private Timer timer;
+    private TimerTask timerTask;
+    long oldTime=0;
+    public void startTimer() {
+        timer = new Timer();
+        initializeTimerTask();
+        timer.schedule(timerTask, 1000, 1000); //
+    }
+    public void initializeTimerTask() {
+        timerTask = new TimerTask() {
+            public void run() {
+                Log.i("in timer", "in timer ++++  "+ (counter++));
+            }
+        };
+    }
+    public void stoptimertask() {
+        if (timer != null) {
+            timer.cancel();
+            timer = null;
+        }
+    }
+    */
+    /********************************TIMER********************/
 
     private void startHeartBeatBrodacster(final int interval) {
         final Handler handler = new Handler();
