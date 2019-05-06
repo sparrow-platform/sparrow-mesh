@@ -74,19 +74,19 @@ public class Sparrow extends Service {
             assert manager != null;
             manager.createNotificationChannel(notificationChannel);
 
-             notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
+            notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
         }
         else {
-             notificationBuilder = new NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID);
+            notificationBuilder = new NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID);
         }
-            Notification notification = notificationBuilder.setOngoing(true)
-                    .setSmallIcon(R.drawable.sparrow)
-                    .setContentTitle("Sparrow is keeping you connected")
-                    .setPriority(NotificationManager.IMPORTANCE_MIN)
-                    .setCategory(Notification.CATEGORY_SERVICE)
-                    .addAction(R.drawable.ic_clear_black_24dp, "Stop", pendingIntent)
-                    .build();
-            startForeground(1, notification);
+        Notification notification = notificationBuilder.setOngoing(true)
+                .setSmallIcon(R.drawable.sparrow)
+                .setContentTitle("Sparrow is keeping you connected")
+                .setPriority(NotificationManager.IMPORTANCE_MIN)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .addAction(R.drawable.ic_clear_black_24dp, "Stop", pendingIntent)
+                .build();
+        startForeground(1, notification);
     }
 
     public Sparrow() {
@@ -126,8 +126,8 @@ public class Sparrow extends Service {
 
     /********************************NEARBY********************/
     private void startNearby(){
-            startAdvertising();
-            startDiscovery();
+        startAdvertising();
+        startDiscovery();
     }
 
     private void stopNearby(){
@@ -280,9 +280,9 @@ public class Sparrow extends Service {
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-               stopNearby();
-               startNearby();
-               handler.postDelayed(this,interval);
+                stopNearby();
+                startNearby();
+                handler.postDelayed(this,interval);
             }
         }, interval);
     }

@@ -33,16 +33,16 @@ public class MainActivity extends AppCompatActivity {
     private String TAG = "SparrowLog";
     private static final int REQUEST_CODE_REQUIRED_PERMISSIONS = 1;
     private static final String[] REQUIRED_PERMISSIONS =
-            new String[] {
-                    Manifest.permission.BLUETOOTH,
-                    Manifest.permission.BLUETOOTH_ADMIN,
-                    Manifest.permission.ACCESS_WIFI_STATE,
-                    Manifest.permission.CHANGE_WIFI_STATE,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.RECEIVE_BOOT_COMPLETED,
-                    Manifest.permission.FOREGROUND_SERVICE,
-                    Manifest.permission.WAKE_LOCK
-            };
+    new String[] {
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN,
+            Manifest.permission.ACCESS_WIFI_STATE,
+            Manifest.permission.CHANGE_WIFI_STATE,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.RECEIVE_BOOT_COMPLETED,
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.WAKE_LOCK
+    };
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -67,14 +67,10 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private boolean checkPermission(Context context, String permission){
-        return (ContextCompat.checkSelfPermission(this,Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED);
-    }
 
     @Override
     protected void onStart() {
         super.onStart();
-
         if (!hasPermissions(this, REQUIRED_PERMISSIONS)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_REQUIRED_PERMISSIONS);
@@ -167,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
         for (int grantResult : grantResults) {
             if (grantResult == PackageManager.PERMISSION_DENIED) {
                 Toast.makeText(this, "Error missing permissions", Toast.LENGTH_LONG).show();
-                finish();
+//                finish();
                 return;
             }
         }
