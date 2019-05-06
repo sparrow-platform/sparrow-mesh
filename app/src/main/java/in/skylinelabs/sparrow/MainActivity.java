@@ -39,6 +39,9 @@ public class MainActivity extends AppCompatActivity {
                     Manifest.permission.ACCESS_WIFI_STATE,
                     Manifest.permission.CHANGE_WIFI_STATE,
                     Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.RECEIVE_BOOT_COMPLETED,
+                    Manifest.permission.FOREGROUND_SERVICE,
+                    Manifest.permission.WAKE_LOCK
             };
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener

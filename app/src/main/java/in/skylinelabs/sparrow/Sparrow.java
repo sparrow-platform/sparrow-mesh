@@ -61,7 +61,7 @@ public class Sparrow extends Service {
         intentAction.putExtra("action", "exit");
         PendingIntent pendingIntent = PendingIntent.getBroadcast(context, -1, intentAction, PendingIntent.FLAG_UPDATE_CURRENT);
         NotificationCompat.Builder notificationBuilder;
-        String NOTIFICATION_CHANNEL_ID = "com.example.simpleapp";
+        String NOTIFICATION_CHANNEL_ID = "in.skylinelabs.sparrow";
         String channelName = "Sparrow Background Service";
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -255,32 +255,7 @@ public class Sparrow extends Service {
                 }
             };
 
-    /********************************TIMER********************/
 
-    /*
-    private Timer timer;
-    private TimerTask timerTask;
-    long oldTime=0;
-    public void startTimer() {
-        timer = new Timer();
-        initializeTimerTask();
-        timer.schedule(timerTask, 1000, 1000); //
-    }
-    public void initializeTimerTask() {
-        timerTask = new TimerTask() {
-            public void run() {
-                Log.i("in timer", "in timer ++++  "+ (counter++));
-            }
-        };
-    }
-    public void stoptimertask() {
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
-    }
-    */
-    /********************************TIMER********************/
 
     private void startHeartBeatBrodacster(final int interval) {
         final Handler handler = new Handler();

@@ -16,14 +16,15 @@ public class SparrowBroadcastReceiver extends BroadcastReceiver {
                 case "restart":
                     Log.i(" Sparrow", "Service Destroyed");
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(new Intent(context, Sparrow.class));
-                    } else {
-                        context.startService(new Intent(context, Sparrow.class));
-                    }
+                    context.startForegroundService(new Intent(context, Sparrow.class));
+                } else {
+                    context.startService(new Intent(context, Sparrow.class));
+                }
                     break;
                 case "exit":
                     context.stopService(new Intent(context, Sparrow.class));
             }
         }
+        
     }
 }
