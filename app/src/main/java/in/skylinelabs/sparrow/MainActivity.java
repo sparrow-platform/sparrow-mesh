@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,6 +24,12 @@ import android.widget.Scroller;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.common.api.ResolvableApiException;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResponse;
+
 import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
@@ -34,14 +41,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_REQUIRED_PERMISSIONS = 1;
     private static final String[] REQUIRED_PERMISSIONS =
     new String[] {
-            Manifest.permission.BLUETOOTH,
-            Manifest.permission.BLUETOOTH_ADMIN,
-            Manifest.permission.ACCESS_WIFI_STATE,
-            Manifest.permission.CHANGE_WIFI_STATE,
             Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.RECEIVE_BOOT_COMPLETED,
-            Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.WAKE_LOCK
+            Manifest.permission.ACCESS_FINE_LOCATION
     };
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
@@ -66,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
     };
+
 
 
     @Override

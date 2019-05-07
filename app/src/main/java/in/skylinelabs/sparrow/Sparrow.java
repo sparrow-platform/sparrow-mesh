@@ -1,22 +1,38 @@
 package in.skylinelabs.sparrow;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.IntentSender;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.wifi.ScanResult;
+import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+import android.widget.Toast;
 
+import com.google.android.gms.common.api.ResolvableApiException;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResponse;
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.AdvertisingOptions;
 import com.google.android.gms.nearby.connection.ConnectionInfo;
@@ -35,26 +51,165 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class Sparrow extends Service {
-    public int counter=0;
+
     private Context context;
     private ConnectionsClient connectionsClient;
     private String TAG = "SparrowLog", codeName = "SPARROW";
     private ArrayList<String> activeEndpoints;
+
+    private String  TAG_SPARROW_WIFI_SERVICE = "SPARROW WIFI SERVICE";
+
+
+    WifiManager mWifiManager;
+
+
 
     @Override
     public void onCreate() {
         super.onCreate();
         connectionsClient = Nearby.getConnectionsClient(this);
         context = getApplicationContext();
-        activeEndpoints = new ArrayList<>();
+        mWifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+
         startMyOwnForeground();
-        startHeartBeatBrodacster(7000);
     }
+
+    public Sparrow() {
+        super();
+    }
+
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        super.onStartCommand(intent, flags, startId);
+        startSparrowWifiService();
+        startTimer();
+        return START_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        stopSparrowWifiService();
+        stoptimertask();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            turnOffHotspot();
+        }
+    }
+
+    private void sendMessegeToActivity(String message) {
+        Log.d("sender", "Broadcasting message");
+        Intent intent = new Intent("payload-received");
+        intent.putExtra("message", message);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
+
+
+    /**************************************WIFI********************************************/
+    private final BroadcastReceiver mWifiScanReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent intent) {
+            if (intent.getAction().equals(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)) {
+                List<ScanResult> mScanResults = mWifiManager.getScanResults();
+                // add your logic here
+                for(ScanResult wifi : mScanResults){
+                    Log.i(TAG_SPARROW_WIFI_SERVICE, wifi.SSID);
+                }
+
+            }
+        }
+    };
+
+    private void startSparrowWifiService() {
+        if(mWifiManager.isWifiEnabled()==false)
+        {
+            mWifiManager.setWifiEnabled(true);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            turnOnHotspot();
+        }
+
+        Log.i(TAG_SPARROW_WIFI_SERVICE, "Attempting to start hotspot");
+
+        WifiConfiguration wifiConfiguration = new WifiConfiguration();
+        wifiConfiguration.SSID = "SparrowNet Node";
+        Method method;
+        try {
+            method = mWifiManager.getClass().getDeclaredMethod("setWifiApEnabled", WifiConfiguration.class, Boolean.TYPE);
+            method.setAccessible(true);
+            method.invoke(mWifiManager, wifiConfiguration, true);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.i(TAG_SPARROW_WIFI_SERVICE, "Error turning on hotspot");
+        }
+
+    }
+
+    private void stopSparrowWifiService() {
+
+    }
+
+
+    private void getFromWifi() {
+        if(mWifiManager.isWifiEnabled()==false)
+        {
+            mWifiManager.setWifiEnabled(true);
+        }
+        registerReceiver(mWifiScanReceiver,
+                new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+        mWifiManager.startScan();
+    }
+
+    /**************************************WIFI********************************************/
+
+
+
+
+
+
+
+    /********************************TIMER********************/
+
+    private Timer timer;
+    private TimerTask timerTask;
+
+    public void startTimer() {
+        timer = new Timer();
+        initializeTimerTask();
+        timer.schedule(timerTask, 1000, 10000); //
+    }
+
+    public void initializeTimerTask() {
+        timerTask = new TimerTask() {
+            public void run() {
+                Log.i(TAG_SPARROW_WIFI_SERVICE, "in timer ++++  ");
+                getFromWifi();
+            }
+        };
+    }
+
+    public void stoptimertask() {
+        if (timer != null) {
+            timer.cancel();
+            timer = null;
+        }
+    }
+    /********************************TIMER********************/
+
+
+
+
 
     private void startMyOwnForeground(){
         Intent intentAction = new Intent(context, SparrowBroadcastReceiver.class);
@@ -88,256 +243,10 @@ public class Sparrow extends Service {
                 .addAction(R.drawable.ic_clear_black_24dp, "Stop", pendingIntent)
                 .build();
         startForeground(1, notification);
-    }
-
-    public Sparrow() {
-        super();
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        super.onStartCommand(intent, flags, startId);
-        //startTimer();
-        startNearby();
-        return START_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-
-        Log.i(" Sparrow", "Service Destroyed");
-        stopNearby();
-        /*
-        Intent broadcastIntent = new Intent(this, SparrowBroadcastReceiver.class);
-        broadcastIntent.putExtra("action","restart");
-        sendBroadcast(broadcastIntent);
-        */
-        //stoptimertask();
-    }
-
-    private void sendMessegeToActivity(String message) {
-        Log.d("sender", "Broadcasting message");
-        Intent intent = new Intent("payload-received");
-        // You can also include some extra data.
-        intent.putExtra("message", message);
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-    }
-
-
-    /********************************NEARBY********************/
-    private void startNearby(){
-        startAdvertising();
-        startDiscovery();
-    }
-
-    private void stopNearby(){
-        connectionsClient.stopAdvertising();
-        connectionsClient.stopDiscovery();
-        connectionsClient.stopAllEndpoints();
-    }
-
-
-
-    private void startDiscovery() {
-        DiscoveryOptions discoveryOptions =
-                new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER ).build();
-        connectionsClient
-                .startDiscovery(getPackageName(), endpointDiscoveryCallback, discoveryOptions)
-                .addOnSuccessListener(new OnSuccessListener<Void>() {
-                    @Override
-                    public void onSuccess(Void aVoid) {
-                        Log.d(TAG,"Discovery success");
-                    }
-                })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Log.d(TAG,"Discovery failure");
-                    }
-                });
-    }
-
-    private void startAdvertising() {
-        AdvertisingOptions advertisingOptions =
-                new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER ).build();
-        connectionsClient
-                .startAdvertising(
-                        codeName, getPackageName(), connectionLifecycleCallback, advertisingOptions)
-                .addOnSuccessListener(new OnSuccessListener<Void>() {
-                    @Override
-                    public void onSuccess(Void aVoid) {
-                        Log.d(TAG,"Advertising success");
-                    }
-                })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Log.d(TAG,"Advertising Failure");
-                    }
-                });
-    }
-
-    private final PayloadCallback payloadCallback =
-            new PayloadCallback() {
-                @Override
-                public void onPayloadReceived(String endpointId, Payload payload) {
-                    if(!activeEndpoints.contains(endpointId))
-                        activeEndpoints.add(endpointId);
-                    try {
-                        String receivedMessage = new String(payload.asBytes(),"UTF-8");
-                        sendMessegeToActivity(new String(receivedMessage));
-                        if(receivedMessage.contains("SYN"))
-                            connectionsClient.sendPayload(endpointId,Payload.fromBytes(("ACK from: "+ Build.MODEL+","+getTimestamp()).getBytes("UTF-8")));
-                    } catch (UnsupportedEncodingException e) {
-                        e.printStackTrace();
-                    }
-                    Log.d(TAG,"Payload receivevd from: "+endpointId +" :" +payload.asBytes().toString());
-                }
-
-                @Override
-                public void onPayloadTransferUpdate(String endpointId, PayloadTransferUpdate update) {
-                    Log.d(TAG,"Payload tranfer update");
-                }
-            };
-
-    private final EndpointDiscoveryCallback endpointDiscoveryCallback =
-            new EndpointDiscoveryCallback() {
-                @Override
-                public void onEndpointFound(String endpointId, DiscoveredEndpointInfo info) {
-                    Log.i(TAG, "onEndpointFound: endpoint found, connecting "+endpointId);
-                    connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
-                }
-
-                @Override
-                public void onEndpointLost(String endpointId) {
-                    Log.i(TAG, "onEndPointLost: End point lost "+endpointId);
-                }
-            };
-
-    // Callbacks for connections to other devices
-    private final ConnectionLifecycleCallback connectionLifecycleCallback =
-            new ConnectionLifecycleCallback() {
-                @Override
-                public void onConnectionInitiated(String endpointId, ConnectionInfo connectionInfo) {
-                    Log.i(TAG, "onConnectionInitiated: accepting connection");
-                    if(!activeEndpoints.contains(endpointId))
-                        connectionsClient.acceptConnection(endpointId, payloadCallback);
-                    else
-                        connectionsClient.rejectConnection(endpointId);
-                }
-
-                @Override
-                public void onConnectionResult(final String endpointId, ConnectionResolution result) {
-
-                    switch (result.getStatus().getStatusCode()) {
-                        case ConnectionsStatusCodes.STATUS_OK:
-                            // We're connected! Can now start sending and receiving data.
-                            Log.i(TAG, "onConnectionResult: connection successful");
-                            activeEndpoints.add(endpointId);
-                            break;
-                        case ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED:
-                            // The connection was rejected by one or both sides.
-                            Log.i(TAG, "onConnectionResult: connection rejected");
-                            break;
-                        case ConnectionsStatusCodes.STATUS_ERROR:
-                            // The connection broke before it was able to be accepted.
-                            Log.i(TAG, "onConnectionResult: connection broke before acceptance");
-                            break;
-                        default:
-                            // Unknown status code
-                            Log.i(TAG, "onConnectionResult: Something went wrong with the connection ");
-                    }
-
-//                    if (result.getStatus().isSuccess()) {
-//                        Log.i(TAG, "onConnectionResult: connection successful");
-//                        activeEndpoints.add(endpointId);
-//                        setTimeout(70000);  //Need dynamic values here
-//                        /*
-//                        connectionsClient.stopDiscovery();
-//                        connectionsClient.stopAdvertising();
-//                        */
-//                    } else {
-//                        final Handler handler = new Handler();
-//                        handler.postDelayed(new Runnable() {
-//                            @Override
-//                            public void run() {
-//                                connectionsClient.requestConnection(codeName, endpointId, connectionLifecycleCallback);
-//                            }
-//                        }, 2000);
-//                        Log.i(TAG, "onConnectionResult: connection failed " + result.getStatus().getStatusMessage());
-//                    }
-                }
-
-                @Override
-                public void onDisconnected(String endpointId) {
-                    Log.i(TAG, "onDisconnected: disconnected from the opponent");
-                    activeEndpoints.remove(endpointId);
-                }
-            };
-
-    /********************************TIMER********************/
-
-    /*
-    private Timer timer;
-    private TimerTask timerTask;
-    long oldTime=0;
-    public void startTimer() {
-        timer = new Timer();
-        initializeTimerTask();
-        timer.schedule(timerTask, 1000, 1000); //
-    }
-    public void initializeTimerTask() {
-        timerTask = new TimerTask() {
-            public void run() {
-                Log.i("in timer", "in timer ++++  "+ (counter++));
-            }
-        };
-    }
-    public void stoptimertask() {
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
-    }
-    */
-    /********************************TIMER********************/
-
-    private void startHeartBeatBrodacster(final int interval) {
-        final Handler handler = new Handler();
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                for(String endpoint: activeEndpoints){
-                    try {
-                        connectionsClient.sendPayload(endpoint,Payload.fromBytes(("SYN from: "+ Build.MODEL +","+getTimestamp()).getBytes("UTF-8")));
-                    } catch (UnsupportedEncodingException e) {
-                        e.printStackTrace();
-                    }
-                }
-                handler.postDelayed(this,interval);
-            }
-        }, interval);
 
     }
 
-    private void setTimeout(final int interval) {
-        final Handler handler = new Handler();
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                stopNearby();
-                startNearby();
-                handler.postDelayed(this,interval);
-            }
-        }, interval);
-    }
 
-    private String getTimestamp(){
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-        String currentDateandTime = sdf.format(new Date());
-        return currentDateandTime;
-    };
 
 
     @Nullable
@@ -345,4 +254,44 @@ public class Sparrow extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
+
+
+
+
+    private WifiManager.LocalOnlyHotspotReservation mReservation;
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void turnOnHotspot() {
+        WifiManager manager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        manager.startLocalOnlyHotspot(new WifiManager.LocalOnlyHotspotCallback() {
+
+            @Override
+            public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
+                super.onStarted(reservation);
+                Log.d(TAG, "Wifi Hotspot is on now");
+                mReservation = reservation;
+            }
+
+            @Override
+            public void onStopped() {
+                super.onStopped();
+                Log.d(TAG, "onStopped: ");
+            }
+
+            @Override
+            public void onFailed(int reason) {
+                super.onFailed(reason);
+                Log.d(TAG, "onFailed: ");
+            }
+        }, new Handler());
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void turnOffHotspot() {
+        if (mReservation != null) {
+            mReservation.close();
+        }
+    }
+
+
 }
