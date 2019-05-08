@@ -1,6 +1,5 @@
 package in.skylinelabs.sparrow;
 
-import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,53 +9,27 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.IntentSender;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.net.wifi.ScanResult;
-import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
-import android.os.Build;
-import android.os.Handler;
+import android.net.wifi.p2p.WifiP2pDevice;
+import android.net.wifi.p2p.WifiP2pDeviceList;
+import android.net.wifi.p2p.WifiP2pManager;
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo;
+import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest;
 import android.os.IBinder;
-import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.annotation.RequiresApi;
-import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
-import android.widget.Toast;
 
-import com.google.android.gms.common.api.ResolvableApiException;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.LocationSettingsRequest;
-import com.google.android.gms.location.LocationSettingsResponse;
 import com.google.android.gms.nearby.Nearby;
-import com.google.android.gms.nearby.connection.AdvertisingOptions;
-import com.google.android.gms.nearby.connection.ConnectionInfo;
-import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback;
-import com.google.android.gms.nearby.connection.ConnectionResolution;
 import com.google.android.gms.nearby.connection.ConnectionsClient;
-import com.google.android.gms.nearby.connection.ConnectionsStatusCodes;
-import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo;
-import com.google.android.gms.nearby.connection.DiscoveryOptions;
-import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback;
-import com.google.android.gms.nearby.connection.Payload;
-import com.google.android.gms.nearby.connection.PayloadCallback;
-import com.google.android.gms.nearby.connection.PayloadTransferUpdate;
-import com.google.android.gms.nearby.connection.Strategy;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 
-import java.io.UnsupportedEncodingException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -64,14 +37,14 @@ public class Sparrow extends Service {
 
     private Context context;
     private ConnectionsClient connectionsClient;
-    private String TAG = "SparrowLog", codeName = "SPARROW";
-    private ArrayList<String> activeEndpoints;
 
     private String  TAG_SPARROW_WIFI_SERVICE = "SPARROW WIFI SERVICE";
 
+    WifiP2pManager manager;
+    WifiP2pManager.Channel channel;
+    BroadcastReceiver receiver;
 
-    WifiManager mWifiManager;
-
+    final HashMap<String, String> wifiNeighbours = new HashMap<String, String>();
 
 
     @Override
@@ -79,7 +52,6 @@ public class Sparrow extends Service {
         super.onCreate();
         connectionsClient = Nearby.getConnectionsClient(this);
         context = getApplicationContext();
-        mWifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
         startMyOwnForeground();
     }
@@ -92,6 +64,7 @@ public class Sparrow extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         super.onStartCommand(intent, flags, startId);
+
         startSparrowWifiService();
         startTimer();
         return START_STICKY;
@@ -100,15 +73,13 @@ public class Sparrow extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+
         stopSparrowWifiService();
         stoptimertask();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            turnOffHotspot();
-        }
     }
 
     private void sendMessegeToActivity(String message) {
-        Log.d("sender", "Broadcasting message");
+        Log.i("sender", "Broadcasting message");
         Intent intent = new Intent("payload-received");
         intent.putExtra("message", message);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
@@ -116,59 +87,74 @@ public class Sparrow extends Service {
 
 
     /**************************************WIFI********************************************/
-    private final BroadcastReceiver mWifiScanReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context c, Intent intent) {
-            if (intent.getAction().equals(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)) {
-                List<ScanResult> mScanResults = mWifiManager.getScanResults();
-                // add your logic here
-                for(ScanResult wifi : mScanResults){
-                    Log.i(TAG_SPARROW_WIFI_SERVICE, wifi.SSID);
-                }
-
-            }
-        }
-    };
-
     private void startSparrowWifiService() {
-        if(mWifiManager.isWifiEnabled()==false)
-        {
-            mWifiManager.setWifiEnabled(true);
-        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            turnOnHotspot();
-        }
+        /*******************BROADCAST****************/
+        Map record = new HashMap();
+        record.put("name", "Sparrow");
+        record.put("data", "PUT DATA HERE");
 
-        Log.i(TAG_SPARROW_WIFI_SERVICE, "Attempting to start hotspot");
+        WifiP2pDnsSdServiceInfo serviceInfo =
+                WifiP2pDnsSdServiceInfo.newInstance("SPARROW", "Communication", record);
 
-        WifiConfiguration wifiConfiguration = new WifiConfiguration();
-        wifiConfiguration.SSID = "SparrowNet Node";
-        Method method;
-        try {
-            method = mWifiManager.getClass().getDeclaredMethod("setWifiApEnabled", WifiConfiguration.class, Boolean.TYPE);
-            method.setAccessible(true);
-            method.invoke(mWifiManager, wifiConfiguration, true);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Log.i(TAG_SPARROW_WIFI_SERVICE, "Error turning on hotspot");
-        }
+        manager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
+        channel = manager.initialize(this, getMainLooper(), null);
 
+        manager.addLocalService(channel, serviceInfo, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {}
+
+            @Override
+            public void onFailure(int arg0) {}
+        });
+
+        /*******************BROADCAST****************/
+
+        /*******************DISCOVERY****************/
+        WifiP2pManager.DnsSdTxtRecordListener txtListener = (fullDomain, record1, device) -> {
+            Log.d(TAG_SPARROW_WIFI_SERVICE, "Received data from Sparrow net" + record1.toString());
+            wifiNeighbours.put(device.deviceAddress, record1.get("name").toString());
+        };
+
+        WifiP2pManager.DnsSdServiceResponseListener servListener = (instanceName, registrationType, resourceType) -> {
+            resourceType.deviceName = wifiNeighbours
+                    .containsKey(resourceType.deviceAddress) ? wifiNeighbours
+                    .get(resourceType.deviceAddress) : resourceType.deviceName;
+            Log.d(TAG_SPARROW_WIFI_SERVICE, "Device name  " + instanceName);
+
+        };
+
+        manager.setDnsSdResponseListeners(channel, servListener, txtListener);
+
+        WifiP2pDnsSdServiceRequest serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
+        manager.addServiceRequest(channel,
+            serviceRequest,
+            new WifiP2pManager.ActionListener() {
+                @Override
+                public void onSuccess() {Log.d(TAG_SPARROW_WIFI_SERVICE, "Service request Success");}
+
+                @Override
+                public void onFailure(int code) {Log.d(TAG_SPARROW_WIFI_SERVICE, "Service request Failuer");}
+            });
+
+
+        manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {Log.d(TAG_SPARROW_WIFI_SERVICE, "Discover services  Success");}
+
+            @Override
+            public void onFailure(int code) {
+                if (code == WifiP2pManager.P2P_UNSUPPORTED) {
+                    Log.d(TAG_SPARROW_WIFI_SERVICE, "P2P isn't supported on this device.");
+                }
+            }
+        });
+        /*******************DISCOVERY****************/
     }
+
 
     private void stopSparrowWifiService() {
 
-    }
-
-
-    private void getFromWifi() {
-        if(mWifiManager.isWifiEnabled()==false)
-        {
-            mWifiManager.setWifiEnabled(true);
-        }
-        registerReceiver(mWifiScanReceiver,
-                new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
-        mWifiManager.startScan();
     }
 
     /**************************************WIFI********************************************/
@@ -194,7 +180,6 @@ public class Sparrow extends Service {
         timerTask = new TimerTask() {
             public void run() {
                 Log.i(TAG_SPARROW_WIFI_SERVICE, "in timer ++++  ");
-                getFromWifi();
             }
         };
     }
@@ -257,41 +242,57 @@ public class Sparrow extends Service {
 
 
 
-
-    private WifiManager.LocalOnlyHotspotReservation mReservation;
-
-    @RequiresApi(api = Build.VERSION_CODES.O)
-    private void turnOnHotspot() {
-        WifiManager manager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        manager.startLocalOnlyHotspot(new WifiManager.LocalOnlyHotspotCallback() {
-
-            @Override
-            public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
-                super.onStarted(reservation);
-                Log.d(TAG, "Wifi Hotspot is on now");
-                mReservation = reservation;
-            }
-
-            @Override
-            public void onStopped() {
-                super.onStopped();
-                Log.d(TAG, "onStopped: ");
-            }
-
-            @Override
-            public void onFailed(int reason) {
-                super.onFailed(reason);
-                Log.d(TAG, "onFailed: ");
-            }
-        }, new Handler());
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.O)
-    private void turnOffHotspot() {
-        if (mReservation != null) {
-            mReservation.close();
-        }
-    }
-
-
 }
+
+
+
+
+
+//    private List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
+//
+//    private WifiP2pManager.PeerListListener peerListListener  = new WifiP2pManager.PeerListListener() {
+//        @Override
+//        public void onPeersAvailable(WifiP2pDeviceList peerList) {
+//
+//            Collection<WifiP2pDevice> refreshedPeers = peerList.getDeviceList();
+//            if (!refreshedPeers.equals(peers)) {
+//                peers.clear();
+//                peers.addAll(refreshedPeers);
+//
+//                Log.i(TAG_SPARROW_WIFI_SERVICE, "Wifi devices found: " + peers.toString());
+//
+//            }
+//
+//            if (peers.size() == 0) {
+//                Log.i(TAG_SPARROW_WIFI_SERVICE, "No Wifi devices found");
+//                return;
+//            }
+//        }
+//    };
+//
+//
+//    /**********Discover  p2p devices****************/
+//    manager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
+//    channel = manager.initialize(this, getMainLooper(), null);
+//    intentFilter = new IntentFilter();
+//        intentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
+//        intentFilter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION);
+//        intentFilter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION);
+//        intentFilter.addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION);
+//
+//    receiver = new WiFiDirectBroadcastReceiver(manager, channel, peerListListener);
+//    registerReceiver(receiver, intentFilter);
+//
+//
+//        manager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+//        @Override
+//        public void onSuccess() {
+//        }
+//
+//        @Override
+//        public void onFailure(int reasonCode) {
+//        }
+//    });
+//
+//
+///**********Discover  p2p devices****************/
