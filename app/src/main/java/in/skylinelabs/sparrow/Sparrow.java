@@ -99,7 +99,7 @@ public class Sparrow extends Service {
         Intent intent = new Intent("payload-received");
         intent.putExtra("message", message);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-        
+
     }
 
 
@@ -209,10 +209,10 @@ public class Sparrow extends Service {
 
         if( mWifiLock == null )
 
-        if( mWifiLock != null && mWifiLock.isHeld() ){
-            mWifiLock.release();
-            //mWifiLock = null;
-        }
+            if( mWifiLock != null && mWifiLock.isHeld() ){
+                mWifiLock.release();
+                //mWifiLock = null;
+            }
 
     }
 
@@ -233,7 +233,7 @@ public class Sparrow extends Service {
     public void startTimer() {
         timer = new Timer();
         initializeTimerTask();
-        timer.schedule(timerTask, 5000, 15000); //
+        timer.schedule(timerTask, 5000, 6000); //
     }
 
     public void initializeTimerTask() {
