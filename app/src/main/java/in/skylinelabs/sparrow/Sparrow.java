@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -42,7 +43,14 @@ public class Sparrow extends Service {
 
     WifiP2pManager manager;
     WifiP2pManager.Channel channel;
-    BroadcastReceiver receiver;
+
+    WifiManager mWifiManager;
+
+    WifiP2pManager.ActionListener broadcastACtionListner;
+    WifiP2pManager.ActionListener discoveryActionLisner;
+    WifiP2pManager.ActionListener serviceRequestActionListner;
+
+    WifiP2pDnsSdServiceRequest serviceRequest;
 
     final HashMap<String, String> wifiNeighbours = new HashMap<String, String>();
 
@@ -64,6 +72,7 @@ public class Sparrow extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         super.onStartCommand(intent, flags, startId);
+        mWifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
         startSparrowWifiService();
         startTimer();
@@ -74,7 +83,6 @@ public class Sparrow extends Service {
     public void onDestroy() {
         super.onDestroy();
 
-        stopSparrowWifiService();
         stoptimertask();
     }
 
@@ -94,21 +102,27 @@ public class Sparrow extends Service {
         record.put("name", "Sparrow");
         record.put("data", "PUT DATA HERE");
 
-        WifiP2pDnsSdServiceInfo serviceInfo =
-                WifiP2pDnsSdServiceInfo.newInstance("SPARROW", "Communication", record);
+        String name = "SPARROW" + getRandomString(10);
 
+        WifiP2pDnsSdServiceInfo serviceInfo =
+                WifiP2pDnsSdServiceInfo.newInstance(name, "Communication", record);
+
+        sendMessegeToActivity("My name is " + name);
         manager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
         channel = manager.initialize(this, getMainLooper(), null);
 
-        manager.addLocalService(channel, serviceInfo, new WifiP2pManager.ActionListener() {
+        broadcastACtionListner = new WifiP2pManager.ActionListener() {
             @Override
-            public void onSuccess() {}
+            public void onSuccess() {Log.d(TAG_SPARROW_WIFI_SERVICE, "Added P2P service");}
 
             @Override
-            public void onFailure(int arg0) {}
-        });
+            public void onFailure(int arg0) {Log.d(TAG_SPARROW_WIFI_SERVICE, "Failed to add P2P service");}
+        };
+        manager.addLocalService(channel, serviceInfo, broadcastACtionListner);
+
 
         /*******************BROADCAST****************/
+
 
         /*******************DISCOVERY****************/
         WifiP2pManager.DnsSdTxtRecordListener txtListener = (fullDomain, record1, device) -> {
@@ -121,24 +135,25 @@ public class Sparrow extends Service {
                     .containsKey(resourceType.deviceAddress) ? wifiNeighbours
                     .get(resourceType.deviceAddress) : resourceType.deviceName;
             Log.d(TAG_SPARROW_WIFI_SERVICE, "Device name  " + instanceName);
+            sendMessegeToActivity(instanceName);
 
         };
 
         manager.setDnsSdResponseListeners(channel, servListener, txtListener);
 
-        WifiP2pDnsSdServiceRequest serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
-        manager.addServiceRequest(channel,
-            serviceRequest,
-            new WifiP2pManager.ActionListener() {
-                @Override
-                public void onSuccess() {Log.d(TAG_SPARROW_WIFI_SERVICE, "Service request Success");}
+        serviceRequest = WifiP2pDnsSdServiceRequest.newInstance();
 
-                @Override
-                public void onFailure(int code) {Log.d(TAG_SPARROW_WIFI_SERVICE, "Service request Failuer");}
-            });
+        serviceRequestActionListner = new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {Log.d(TAG_SPARROW_WIFI_SERVICE, "Service request Success");}
+
+            @Override
+            public void onFailure(int code) {Log.d(TAG_SPARROW_WIFI_SERVICE, "Service request Failuer");}
+        };
+        manager.addServiceRequest(channel, serviceRequest,serviceRequestActionListner);
 
 
-        manager.discoverServices(channel, new WifiP2pManager.ActionListener() {
+        discoveryActionLisner = new WifiP2pManager.ActionListener() {
             @Override
             public void onSuccess() {Log.d(TAG_SPARROW_WIFI_SERVICE, "Discover services  Success");}
 
@@ -148,14 +163,13 @@ public class Sparrow extends Service {
                     Log.d(TAG_SPARROW_WIFI_SERVICE, "P2P isn't supported on this device.");
                 }
             }
-        });
+        };
+        manager.discoverServices(channel, discoveryActionLisner);
         /*******************DISCOVERY****************/
     }
 
 
-    private void stopSparrowWifiService() {
 
-    }
 
     /**************************************WIFI********************************************/
 
@@ -173,13 +187,30 @@ public class Sparrow extends Service {
     public void startTimer() {
         timer = new Timer();
         initializeTimerTask();
-        timer.schedule(timerTask, 1000, 10000); //
+        timer.schedule(timerTask, 5000, 15000); //
     }
 
     public void initializeTimerTask() {
         timerTask = new TimerTask() {
             public void run() {
                 Log.i(TAG_SPARROW_WIFI_SERVICE, "in timer ++++  ");
+                if(mWifiManager.isWifiEnabled()==false)
+                {
+                    mWifiManager.setWifiEnabled(true);
+                }
+                manager.clearLocalServices(channel,broadcastACtionListner);
+                manager.clearLocalServices(channel,discoveryActionLisner);
+                manager.clearLocalServices(channel,serviceRequestActionListner);
+
+                manager.stopPeerDiscovery(channel, discoveryActionLisner);
+                manager.stopPeerDiscovery(channel, broadcastACtionListner);
+                manager.stopPeerDiscovery(channel, serviceRequestActionListner);
+
+                manager.clearServiceRequests(channel, broadcastACtionListner);
+                manager.clearServiceRequests(channel, discoveryActionLisner);
+                manager.clearServiceRequests(channel, serviceRequestActionListner);
+
+                startSparrowWifiService();
             }
         };
     }
@@ -191,10 +222,6 @@ public class Sparrow extends Service {
         }
     }
     /********************************TIMER********************/
-
-
-
-
 
     private void startMyOwnForeground(){
         Intent intentAction = new Intent(context, SparrowBroadcastReceiver.class);
@@ -238,6 +265,17 @@ public class Sparrow extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    private static final String ALLOWED_CHARACTERS ="0123456789qwertyuiopasdfghjklzxcvbnm";
+
+    private static String getRandomString(final int sizeOfRandomString)
+    {
+        final Random random=new Random();
+        final StringBuilder sb=new StringBuilder(sizeOfRandomString);
+        for(int i=0;i<sizeOfRandomString;++i)
+            sb.append(ALLOWED_CHARACTERS.charAt(random.nextInt(ALLOWED_CHARACTERS.length())));
+        return sb.toString();
     }
 
 
