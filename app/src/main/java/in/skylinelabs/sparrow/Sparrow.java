@@ -25,8 +25,13 @@ import android.util.Log;
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.ConnectionsClient;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +50,9 @@ public class Sparrow extends Service {
     WifiP2pManager.Channel channel;
 
     WifiManager mWifiManager;
+
+    WifiManager.WifiLock mWifiLock = null;
+
 
     WifiP2pManager.ActionListener broadcastACtionListner;
     WifiP2pManager.ActionListener discoveryActionLisner;
@@ -86,11 +94,12 @@ public class Sparrow extends Service {
         stoptimertask();
     }
 
-    private void sendMessegeToActivity(String message) {
+    private void sendMessegeToActivity(String message) throws IOException {
         Log.i("sender", "Broadcasting message");
         Intent intent = new Intent("payload-received");
         intent.putExtra("message", message);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        
     }
 
 
@@ -107,7 +116,11 @@ public class Sparrow extends Service {
         WifiP2pDnsSdServiceInfo serviceInfo =
                 WifiP2pDnsSdServiceInfo.newInstance(name, "Communication", record);
 
-        sendMessegeToActivity("My name is " + name);
+        try {
+            sendMessegeToActivity("My name is " + name);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         manager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
         channel = manager.initialize(this, getMainLooper(), null);
 
@@ -135,7 +148,11 @@ public class Sparrow extends Service {
                     .containsKey(resourceType.deviceAddress) ? wifiNeighbours
                     .get(resourceType.deviceAddress) : resourceType.deviceName;
             Log.d(TAG_SPARROW_WIFI_SERVICE, "Device name  " + instanceName);
-            sendMessegeToActivity(instanceName);
+            try {
+                sendMessegeToActivity(instanceName);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
         };
 
@@ -168,7 +185,36 @@ public class Sparrow extends Service {
         /*******************DISCOVERY****************/
     }
 
+    /***
+     * Calling this method will aquire the lock on wifi. This is avoid wifi
+     * from going to sleep as long as <code>releaseWifiLock</code> method is called.
+     **/
+    private void holdWifiLock() {
+        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
+        if( mWifiLock == null )
+            mWifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL, TAG_SPARROW_WIFI_SERVICE);
+
+        mWifiLock.setReferenceCounted(false);
+
+        if( !mWifiLock.isHeld() )
+            mWifiLock.acquire();
+    }
+
+    /***
+     * Calling this method will release if the lock is already help. After this method is called,
+     * the Wifi on the device can goto sleep.
+     **/
+    private void releaseWifiLock() {
+
+        if( mWifiLock == null )
+
+        if( mWifiLock != null && mWifiLock.isHeld() ){
+            mWifiLock.release();
+            //mWifiLock = null;
+        }
+
+    }
 
 
     /**************************************WIFI********************************************/
@@ -198,6 +244,7 @@ public class Sparrow extends Service {
                 {
                     mWifiManager.setWifiEnabled(true);
                 }
+                holdWifiLock();
                 manager.clearLocalServices(channel,broadcastACtionListner);
                 manager.clearLocalServices(channel,discoveryActionLisner);
                 manager.clearLocalServices(channel,serviceRequestActionListner);
@@ -220,6 +267,7 @@ public class Sparrow extends Service {
             timer.cancel();
             timer = null;
         }
+        releaseWifiLock();
     }
     /********************************TIMER********************/
 
@@ -278,6 +326,11 @@ public class Sparrow extends Service {
         return sb.toString();
     }
 
+    private String getTimestamp(){
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
+        String currentDateandTime = sdf.format(new Date());
+        return currentDateandTime;
+    };
 
 
 }
