@@ -22,6 +22,7 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.ConnectionsClient;
@@ -102,6 +103,8 @@ public class Sparrow extends Service {
         Intent intent = new Intent("payload-received");
         intent.putExtra("message", message);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        Toast toast=Toast.makeText(context,message,Toast.LENGTH_LONG);
+        toast.show();
 
     }
 
@@ -234,8 +237,8 @@ public class Sparrow extends Service {
                         e.printStackTrace();
                     }
                 }, (fullDomainName, record, device) -> {
-                            Log.d(TAG_SPARROW_WIFI_SERVICE, "Received data from Sparrow net" + record.toString());
-                            wifiNeighbours.put(device.deviceAddress, record.get("name").toString());
+                    Log.d(TAG_SPARROW_WIFI_SERVICE, "Received data from Sparrow net" + record.toString());
+                    wifiNeighbours.put(device.deviceAddress, record.get("name").toString());
                     // do all the things you need to do with detailed information about detected service
                 });
 
