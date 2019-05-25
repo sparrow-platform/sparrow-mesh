@@ -13,10 +13,10 @@ public class DeviceStartReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(new Intent(context, Sparrow.class));
+            context.startForegroundService(new Intent(context, SparrowBLE.class));
 
         } else {
-            context.startService(new Intent(context, Sparrow.class));
+            context.startService(new Intent(context, SparrowBLE.class));
         }
     }
 

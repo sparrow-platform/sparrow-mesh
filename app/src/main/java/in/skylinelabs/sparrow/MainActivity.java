@@ -10,6 +10,7 @@ import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.SyncStateContract;
 import android.support.annotation.CallSuper;
 import android.support.design.widget.BottomNavigationView;
 import android.support.v4.app.ActivityCompat;
@@ -20,23 +21,27 @@ import android.support.annotation.NonNull;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Scroller;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.api.ResolvableApiException;
+import com.google.android.gms.common.internal.Constants;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResponse;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
-    Intent mServiceIntent;
     private TextView messages;
-    private Sparrow sparrowService;
     private String TAG = "SparrowLog";
     private static final int REQUEST_CODE_REQUIRED_PERMISSIONS = 1;
     private static final String[] REQUIRED_PERMISSIONS =
@@ -45,6 +50,8 @@ public class MainActivity extends AppCompatActivity {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.WAKE_LOCK
     };
+    private EditText sendMessage;
+    private ImageButton sendButton;
 
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -70,7 +77,6 @@ public class MainActivity extends AppCompatActivity {
     };
 
 
-
     @Override
     protected void onStart() {
         super.onStart();
@@ -83,13 +89,11 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        sparrowService = new Sparrow();
-        mServiceIntent = new Intent(this, sparrowService.getClass());
-        if (!isMyServiceRunning(sparrowService.getClass())) {
+        if (!isMyServiceRunning(SparrowBLE.class)) {
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-                startForegroundService(new Intent(this, Sparrow.class));
+                startForegroundService(new Intent(this, SparrowBLE.class));
             } else {
-                startService(new Intent(this, Sparrow.class));
+                startService(new Intent(this, SparrowBLE.class));
             }
         }
     }
@@ -119,10 +123,35 @@ public class MainActivity extends AppCompatActivity {
         navView.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
         Log.i(TAG, "App started");
 
+        sendMessage = findViewById(R.id.send_message);
+        sendButton = findViewById(R.id.send_button);
+
+        sendButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String message = sendMessage.getText().toString();
+                if(!message.isEmpty()) {
+                    try {
+                        sendMessegeToService(message);
+                        sendMessage.setText("");
+                        messages.append("You: "+message+"\n");
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
         messages = findViewById(R.id.messages);
         messages.setMovementMethod(new ScrollingMovementMethod());
         LocalBroadcastManager.getInstance(this).registerReceiver(mMessageReceiver,
                 new IntentFilter("payload-received"));
+    }
+
+    private void sendMessegeToService(String message) throws IOException {
+        Log.i("sender", "Broadcasting message");
+        Intent intent = new Intent("send-payload");
+        intent.putExtra("message", message);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
     private boolean isMyServiceRunning(Class<?> serviceClass) {

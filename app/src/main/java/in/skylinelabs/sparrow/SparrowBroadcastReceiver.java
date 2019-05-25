@@ -19,13 +19,13 @@ public class SparrowBroadcastReceiver extends BroadcastReceiver {
                 case "restart":
                     Log.i(" Sparrow", "Service Destroyed");
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(new Intent(context, Sparrow.class));
+                    context.startForegroundService(new Intent(context, SparrowBLE.class));
                 } else {
-                    context.startService(new Intent(context, Sparrow.class));
+                    context.startService(new Intent(context, SparrowBLE.class));
                 }
                     break;
                 case "exit":
-                    context.stopService(new Intent(context, Sparrow.class));
+                    context.stopService(new Intent(context, SparrowBLE.class));
                     Toast toast=Toast.makeText(context,"Open Sparrow app to re-connect to Sparrow Net",Toast.LENGTH_LONG);
                     toast.show();
             }
