@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattServer;
 import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothGattService;
@@ -30,13 +31,11 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
-import android.support.v4.os.ParcelCompat;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -50,13 +49,22 @@ import java.util.Set;
 public class SparrowBLE extends Service {
     private Context context;
     private String TAG = "SparrowBLE";
+    private int nextDeviceIndex = 0;
 
     private BluetoothManager mBluetoothManager;
     private BluetoothGattServer mBluetoothGattServer;
     private BluetoothLeAdvertiser mBluetoothLeAdvertiser;
     private BluetoothLeScanner mBluetoothLeScanner;
+    private BluetoothGatt currentBluetoothGatt;
+
+    private ArrayList<MessegeBLE> messegeBuffer = new ArrayList<>();
+
     /* Collection of notification subscribers */
-    private Set<BluetoothDevice> mConnectedDevices = new HashSet<>();
+    private Set<BluetoothDevice> mConnectedClientDevices = new HashSet<>();
+    private Set<BluetoothDevice> mConnectedServerDevices = new HashSet<>();
+    private ArrayList<BluetoothDevice> mAvailableDevices = new ArrayList<>();
+
+
     private Handler handler;
 
     @Override
@@ -204,19 +212,20 @@ public class SparrowBLE extends Service {
         public void onReceive(Context context, Intent intent) {
             // Get extra data included in the Intent
             String message = intent.getStringExtra("message");
-            notifyToConnectedDeivces(message);
+            messegeBuffer.add(new MessegeBLE(message,1.0,60));
+            //notifyToConnectedDeivces(message);
             //messages.append(message+"\n");
             Log.d(TAG, "Sending message: " + message);
         }
     };
 
-    private void notifyToConnectedDeivces(String message){
+    private void notifyToDeivce(BluetoothDevice device, String message){
         BluetoothGattCharacteristic sparrowCharacteristic = mBluetoothGattServer
                 .getService(SparrowBLEProfile.SPARROW_SERVICE)
                 .getCharacteristic(SparrowBLEProfile.SPARROW_NOTIFICATION);
-        sparrowCharacteristic.setValue(message);
-        for (BluetoothDevice device : mConnectedDevices) {
-            mBluetoothGattServer.notifyCharacteristicChanged(device, sparrowCharacteristic, false);
+        for(int i=0;i < message.length();i+=20) {
+            sparrowCharacteristic.setValue(message.substring(i,i+20<message.length()?i+20:message.length()));
+                mBluetoothGattServer.notifyCharacteristicChanged(device, sparrowCharacteristic,false);
         }
     }
 
@@ -229,12 +238,13 @@ public class SparrowBLE extends Service {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "Client BluetoothDevice CONNECTED: " + gatt.getDevice().getName());
                 gatt.discoverServices();
-                mConnectedDevices.add(gatt.getDevice());
+                gatt.requestMtu(512);
+                mConnectedServerDevices.add(gatt.getDevice());
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.i(TAG, "Client BluetoothDevice DISCONNECTED: " + gatt.getDevice().getName());
                 //Remove device from any active subscriptions
-                mConnectedDevices.remove(gatt.getDevice());
+                mConnectedServerDevices.remove(gatt.getDevice());
 
             }
         }
@@ -245,7 +255,13 @@ public class SparrowBLE extends Service {
             BluetoothGattCharacteristic sparrowCharacteristic = gatt
                     .getService(SparrowBLEProfile.SPARROW_SERVICE)
                     .getCharacteristic(SparrowBLEProfile.SPARROW_NOTIFICATION);
+
             gatt.setCharacteristicNotification(sparrowCharacteristic,true);
+
+            BluetoothGattDescriptor descriptor = sparrowCharacteristic.getDescriptor(SparrowBLEProfile.CLIENT_CONFIG);
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            gatt.writeDescriptor(descriptor);
+
         }
 
         @Override
@@ -266,11 +282,25 @@ public class SparrowBLE extends Service {
             Log.i(TAG, "Server BluetoothDevice ConnectionChange " + newState);
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "Server BluetoothDevice CONNECTED: " + device);
+                mConnectedClientDevices.add(device);
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.i(TAG, "Server BluetoothDevice DISCONNECTED: " + device);
                 //Remove device from any active subscriptions
-                mConnectedDevices.remove(device);
+                mConnectedClientDevices.remove(device);
             }
+        }
+
+        @Override
+        public void onDescriptorWriteRequest(BluetoothDevice device, int requestId, BluetoothGattDescriptor descriptor, boolean preparedWrite, boolean responseNeeded, int offset, byte[] value) {
+            Log.i(TAG, "Descriptor write request recieved: " + device.getName());
+            for (MessegeBLE msg: messegeBuffer) {
+                if(!msg.isSent(device.getAddress())){
+                    notifyToDeivce(device,msg.getData());
+                    msg.sentTo(device.getAddress());
+                }
+            }
+            mBluetoothGattServer.cancelConnection(device);
+            super.onDescriptorWriteRequest(device, requestId, descriptor, preparedWrite, responseNeeded, offset, value);
         }
 
         @Override
@@ -307,10 +337,7 @@ public class SparrowBLE extends Service {
         stopServer();
     }
 
-    private void connectBLE(BluetoothDevice bluetoothDevice){
-        bluetoothDevice.connectGatt(context,false,mGattConnectionCallback);
 
-    }
 
     private ScanCallback scanCallback = new ScanCallback() {
         @Override
@@ -320,8 +347,9 @@ public class SparrowBLE extends Service {
             List<ParcelUuid> serviceUuids = result.getScanRecord().getServiceUuids();
             if(serviceUuids != null && serviceUuids.contains(new ParcelUuid(SparrowBLEProfile.SPARROW_SERVICE))) {
                 Log.d(TAG, "Sparrow device detected: " + result.getScanRecord().getDeviceName());
-                if(!mConnectedDevices.contains(result.getDevice())) {
-                    connectBLE(result.getDevice());
+                if(!mAvailableDevices.contains(result.getDevice())) {
+                    mAvailableDevices.add(result.getDevice());
+                    //result.getDevice().connectGatt(context,false,mGattConnectionCallback);
                     Log.d(TAG,"Connecting to sparrow device");
                 }
             }
@@ -336,8 +364,8 @@ public class SparrowBLE extends Service {
                 List<ParcelUuid> serviceUuids = scanResult.getScanRecord().getServiceUuids();
                 if(serviceUuids != null && serviceUuids.contains(new ParcelUuid(SparrowBLEProfile.SPARROW_SERVICE))) {
                     Log.d(TAG, "Sparrow device detected: " + scanResult.getScanRecord().getDeviceName());
-                    if(!mConnectedDevices.contains(scanResult.getDevice())) {
-                        connectBLE(scanResult.getDevice());
+                    if(!mAvailableDevices.contains(scanResult.getDevice())) {
+                        mAvailableDevices.add(scanResult.getDevice());
                         Log.d(TAG,"Connecting to sparrow device");
                     }
                 }
@@ -370,13 +398,33 @@ public class SparrowBLE extends Service {
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
                 .build();
 
+        Runnable messegeBufferManager = new Runnable() {
+            @Override
+            public void run() {
+                // TODO: 15/6/19 Make sure messege buffer is maintained
+            }
+        };
+
+        Runnable changeConnection = new Runnable() {
+            @Override
+            public void run() {
+                if(mAvailableDevices.size() > 0) {
+                    if (currentBluetoothGatt != null)
+                        currentBluetoothGatt.close();
+                    currentBluetoothGatt = mAvailableDevices.get(nextDeviceIndex).connectGatt(context, false, mGattConnectionCallback);
+                    Log.d(TAG,"Connecting to: "+nextDeviceIndex);
+                    nextDeviceIndex = mAvailableDevices.size() <= ++nextDeviceIndex? 0 : nextDeviceIndex;
+                }
+                handler.postDelayed(this,5000);
+            }
+        };
 
         Runnable startScan = new Runnable() {
             @Override
             public void run() {
                 Log.d(TAG,"Starting BLE discovery");
                 mBluetoothLeScanner.startScan(scanFilters,scanSettings,scanCallback);
-                handler.postDelayed(this,15000);
+                handler.postDelayed(this,20000);
             }
         };
 
@@ -385,10 +433,13 @@ public class SparrowBLE extends Service {
             public void run() {
                 Log.d(TAG,"Stopping BLE discovery");
                 mBluetoothLeScanner.stopScan(scanCallback);
-                handler.postDelayed(this,15000);
+                //mConnectedDevices.clear();
+                handler.postDelayed(this,20000);
             }
         };
+
         handler.postDelayed(startScan,2000);
+        handler.postDelayed(changeConnection,8000);
         handler.postDelayed(stopcan,8000);
 
     }
