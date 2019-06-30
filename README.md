@@ -133,6 +133,11 @@ Sparrow uses Google Nearby Connections API along with custom BLE and Wifi client
 <br><br>
 For device to server MQTT connection, we use Eclpise Paho MQTT clients. 
 <br><br>
+App files description - <br>
+```
+1. Mesh service: Sparrow.Java, SparrowBLE.java
+2. Message object: Message.java
+```
 Sparrow Mesh exists as a background service in smartphones. We tested Battery consumption of Sparrow mesh on multiple phones. Here are the battery utilization results:<br>
 ```
 % difference in daily battery utilization with and without Sparrow Mesh
