@@ -15,6 +15,11 @@ Individually, every node in Sparrow Mesh has range of:<br>
 2. BLE/Bluetooth - 150m<br>
 3. Sound - 30m
 
+<p align="center">
+<img src="https://sparrow-platform.com/images/sparrow/SparrowMesh.png"/>
+</p>
+
+
 <h3>Mesh implementation details -</h3>
 <b>1. User Ids:</b><br>
 Sparrow implements a simple UserID format - 
@@ -119,6 +124,9 @@ $messageID - 'sparrow_' + $destinationUserID + '_' + $timeStampOfMessageOrigin
 $messageContent - The actual message content
 
 ```
+<p align="center">
+<img src="https://raw.githubusercontent.com/sparrow-platform/sparrow-mesh/master/Message-Relay-cycle.png"/>
+</p>
 
 <b>5. Technology used</b><br>
 Sparrow uses Google Nearby Connections API along with custom BLE and Wifi clients for achieving P2P mesh
