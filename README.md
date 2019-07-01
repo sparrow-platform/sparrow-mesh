@@ -147,3 +147,5 @@ Sparrow Mesh exists as a background service in smartphones. We tested Battery co
 4. OnePlus 6 - 1.9%
 5. Nokia 7.1 - 4.2%
 ```
+
+Check the duck-sparrow-link repo to know more about how we implemenet SparrowMesh node on Project Owl ducks (ESP32) - https://github.com/sparrow-platform/duck-sparrow-link
